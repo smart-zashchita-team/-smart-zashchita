@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Помощник центра выдачи</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+/* Layout: header + three tabs (Работник / Оператор / Пилот). Worker tab = phone chat + RFID panel side by side, stacking on phones */
+:root{
+  --bg:#EEF0F2; --panel:#FFFFFF; --ink:#1B2430; --muted:#5B6573; --line:#D5DAE0;
+  --accent:#E8772E; --accent-ink:#1B2430; --me:#1B2430; --me-ink:#F4F2EC; --bot:#F1EEE7;
+  --warn-bg:#FBE3D2; --warn-ink:#6A2F0C; --ok:#1F7A4D; --ok-bg:#DDF1E6; --info-bg:#E2E9F3; --info-ink:#1F3F6B;
+  --f-display:'Oswald','Arial Narrow',Arial,sans-serif; --f-body:'IBM Plex Sans',Arial,sans-serif; --f-mono:'IBM Plex Mono','Courier New',monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12181F; --panel:#1B2430; --ink:#EEF0F2; --muted:#A3ADB9; --line:#2F3B49;
+  --accent:#F08A45; --accent-ink:#12181F; --me:#F08A45; --me-ink:#12181F; --bot:#26313F;
+  --warn-bg:#4A2A16; --warn-ink:#FFD6BA; --ok:#6FD3A0; --ok-bg:#183A2A; --info-bg:#1E2F45; --info-ink:#BFD5F2; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12181F; --panel:#1B2430; --ink:#EEF0F2; --muted:#A3ADB9; --line:#2F3B49;
+  --accent:#F08A45; --accent-ink:#12181F; --me:#F08A45; --me-ink:#12181F; --bot:#26313F;
+  --warn-bg:#4A2A16; --warn-ink:#FFD6BA; --ok:#6FD3A0; --ok-bg:#183A2A; --info-bg:#1E2F45; --info-ink:#BFD5F2; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:18px 32px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+header h1{font-family:var(--f-display);font-weight:500;font-size:clamp(26px,4vw,38px);text-transform:uppercase;letter-spacing:.5px;margin:0;line-height:1.05}
+header p{margin:6px 0 0;color:var(--muted);max-width:68ch}
+.team{font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:2px solid var(--line)}
+.tab{font:inherit;font-weight:600;padding:10px 16px;border:none;background:none;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;display:flex;gap:8px;align-items:center}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.badge{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:12px;display:inline-grid;place-items:center}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted)}
+/* phone */
+.phone{background:var(--panel);border:10px solid var(--ink);border-radius:34px;overflow:hidden;display:flex;flex-direction:column;height:640px;max-height:80vh}
+.ph-top{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+.ava{width:36px;height:36px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--f-display);font-size:16px}
+.ph-top b{display:block;line-height:1.2}.ph-top small{color:var(--muted)}
+.ph-top .reset{margin-left:auto;font:inherit;font-size:13px;background:none;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:5px 10px;cursor:pointer}
+.chat{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:86%;padding:9px 13px;border-radius:16px;animation:in .22s ease both}
+.me{align-self:flex-end;background:var(--me);color:var(--me-ink);border-bottom-right-radius:4px}
+.bot{align-self:flex-start;background:var(--bot);border-bottom-left-radius:4px}
+.sys{align-self:center;font-size:12px;color:var(--info-ink);background:var(--info-bg);padding:4px 10px;border-radius:999px;max-width:95%;text-align:center}
+.src{display:block;margin-top:6px;font-size:12px;color:var(--muted)}
+.photo{display:inline-block;width:120px;height:80px;border-radius:8px;background:repeating-linear-gradient(45deg,var(--line) 0 6px,transparent 6px 12px);border:1px solid var(--line);vertical-align:middle}
+.typing{align-self:flex-start;color:var(--muted);font-size:13px;padding:4px 8px}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.msg{animation:none}}
+.quick{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-top:1px solid var(--line)}
+.chip{font:inherit;font-size:13px;font-weight:600;padding:7px 12px;border-radius:999px;border:1.5px solid var(--accent);background:transparent;color:var(--ink);cursor:pointer}
+.chip:hover{background:var(--accent);color:var(--accent-ink)}
+.chip.human{border-color:var(--line);color:var(--muted);font-weight:400}
+.compose{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
+.compose input{flex:1;min-width:0;font:inherit;padding:9px 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.send{font:inherit;font-weight:600;padding:8px 14px;border-radius:999px;border:none;background:var(--accent);color:var(--accent-ink);cursor:pointer}
+/* kits */
+.kits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.kits{grid-template-columns:minmax(0,1fr)}}
+.kit{font:inherit;text-align:left;border:1.5px solid var(--line);border-radius:10px;padding:10px;background:var(--panel);color:var(--ink);cursor:pointer}
+.kit[aria-pressed="true"]{border-color:var(--accent)}
+.kit b{font-family:var(--f-mono);font-weight:400;font-size:13px}
+.st{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--bot)}
+.st.ready{background:var(--ok-bg);color:var(--ok)}.st.unk{background:var(--warn-bg);color:var(--warn-ink)}.st.res{background:var(--info-bg);color:var(--info-ink)}
+.kit small{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.hist li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.hist time{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.toggle{display:flex;gap:10px;align-items:center;font-size:14px;cursor:pointer}
+.toggle input{width:18px;height:18px;accent-color:var(--accent)}
+.hint{background:var(--info-bg);color:var(--info-ink);border-radius:10px;padding:10px 14px;font-size:14px}
+/* operator */
+.op{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:860px){.op{grid-template-columns:minmax(0,1fr)}}
+.queue{display:flex;flex-direction:column;gap:8px}
+.qi{font:inherit;text-align:left;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.qi[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.qi .row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.qi strong{font-family:var(--f-mono);font-weight:400;font-size:13px}
+.pill{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--bot);white-space:nowrap}
+.pill.urgent{background:var(--warn-bg);color:var(--warn-ink)}.pill.new{background:var(--accent);color:var(--accent-ink)}.pill.done{background:var(--ok-bg);color:var(--ok)}.pill.work{background:var(--info-bg);color:var(--info-ink)}
+.card{border:1.5px solid var(--ink);border-radius:12px;overflow:hidden}
+.card-h{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:var(--ink);color:var(--panel)}
+.card-h strong{font-family:var(--f-mono);font-weight:400}
+dl{margin:0;padding:12px 14px;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 14px}
+dt{color:var(--muted);font-size:13px}dd{margin:0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 14px;align-items:center}
+.btn{font:inherit;font-weight:600;padding:8px 14px;border-radius:8px;border:1.5px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:default}
+select{font:inherit;padding:7px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink)}
+.log{font-size:13px;color:var(--muted);padding:0 14px 12px}
+.empty{color:var(--muted);padding:20px;text-align:center;border:1.5px dashed var(--line);border-radius:12px}
+/* pilot */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kpi b{display:block;font-family:var(--f-display);font-weight:500;font-size:40px;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--muted);font-size:13px}
+.kpi.safe b{color:var(--ok)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
+.tw{overflow-x:auto}
+footer{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="team">Команда «Смарт-Защита» · РОСБИОТЕХ · кейс БТК Сфера</div>
+      <h1>Помощник центра выдачи</h1>
+      <p>Напишите в чат как работник или нажмите кнопку-подсказку. Обращение сразу появится у оператора, а метрики пилота пересчитаются.</p>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="t-worker" aria-selected="true" data-tab="worker">1 · Работник</button>
+    <button class="tab" role="tab" id="t-operator" aria-selected="false" data-tab="operator">2 · Оператор <span class="badge" id="qbadge">2</span></button>
+    <button class="tab" role="tab" id="t-pilot" aria-selected="false" data-tab="pilot">3 · Метрики пилота</button>
+  </div>
+
+  <!-- WORKER -->
+  <section id="p-worker" class="grid">
+    <div class="phone" aria-label="Чат работника">
+      <div class="ph-top"><div class="ava">СЗ</div><div><b>Помощник по спецодежде</b><small>пропуск 4417 · цех 2</small></div><button class="reset" id="reset">Заново</button></div>
+      <div class="chat" id="chat" aria-live="polite"></div>
+      <div class="quick" id="quick"></div>
+      <form class="compose" id="compose"><input id="inp" autocomplete="off" placeholder="Напишите своими словами…" aria-label="Сообщение"><button class="send" type="submit">Отпр.</button></form>
+    </div>
+    <div class="pane">
+      <span class="label">Комплекты работника 4417 по RFID-учёту · нажмите, чтобы увидеть считывания</span>
+      <div class="kits" id="kits"></div>
+      <ul class="hist" id="hist"></ul>
+      <label class="toggle"><input type="checkbox" id="fail"> Сымитировать сбой учёта: метка комплекта №2 не считывалась с 24.09</label>
+      <div class="hint" id="hint">Попробуйте: «порвал куртку», «где мой комплект», «маловаты брюки», «можно ли работать в прожжённой куртке у сварки», или просто «одежда плохая».</div>
+    </div>
+  </section>
+
+  <!-- OPERATOR -->
+  <section id="p-operator" class="op" hidden>
+    <div class="pane">
+      <span class="label">Очередь обращений · центр выдачи №1</span>
+      <div class="queue" id="queue"></div>
+    </div>
+    <div class="pane" id="detail"></div>
+  </section>
+
+  <!-- PILOT -->
+  <section id="p-pilot" hidden style="display:flex;flex-direction:column;gap:14px">
+    <div class="kpis" id="kpis"></div>
+    <div class="pane">
+      <span class="label">Как читать метрики в пилоте</span>
+      <div class="tw"><table>
+        <tr><th>Показатель</th><th>Что считаем</th><th>Порог для развития</th></tr>
+        <tr><td>Закрыто без визита</td><td>Статус, бронь комплекта, запись на примерку оформлены в чате</td><td>Больше, чем в контрольном цехе</td></tr>
+        <tr><td>Карточки без правок</td><td>Оператор подтвердил тип и действие без изменений</td><td>Не ниже 80%</td></tr>
+        <tr><td>Передано человеку</td><td>Вопросы о защите, жалобы, нет данных, низкая уверенность</td><td>Все такие случаи, без исключений</td></tr>
+        <tr><td>Ответы ИИ о защитных свойствах</td><td>Разбор всех диалогов на эту тему</td><td>Ноль</td></tr>
+      </table></div>
+    </div>
+  </section>
+
+  <footer>Все данные вымышленные. Ответы задаются правилами сценария и показывают логику работы; обученная модель не подключена.</footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let fail=false, sel=1, seq=131, flow=null, ctx={}, timers=[];
+const M={total:0,noVisit:0,human:0,confirmed:0,edited:0,safety:0};
+
+function kits(){return [
+  {n:1,id:'К-4417-1',st:'На работнике',cls:'',t:'выдан 06.10 · постамат П-2',
+   h:[['06.10 07:42','Постамат П-2','выдан по пропуску'],['05.10 18:10','Центр выдачи','загружен в постамат'],['04.10 11:30','Прачечная','стирка завершена']]},
+  fail?{n:2,id:'К-4417-2',st:'Нет данных',cls:'unk',t:'последнее считывание 24.09 · прачечная',
+   h:[['24.09 09:05','Прачечная','принят в стирку'],['23.09 17:40','Коллектор К-1','сдан работником']]}
+      :{n:2,id:'К-4417-2',st:'В стирке',cls:'',t:'возврат в П-2 15.10, 08:00',
+   h:[['12.10 09:05','Прачечная','принят в стирку'],['11.10 17:40','Коллектор К-1','сдан работником'],['—','План','загрузка в П-2 15.10, 08:00']]},
+  {n:3,id:'К-4417-3',st:ctx.booked?'Забронирован':'Готов к выдаче',cls:ctx.booked?'res':'ready',t:'центр выдачи · полка 12',
+   h:[['13.10 16:20','Центр выдачи','принят на полку 12'],['13.10 10:00','Прачечная','стирка и проверка завершены']]}]}
+function renderKits(){
+  const k=kits();
+  $('kits').innerHTML=k.map(x=>`<button class="kit" aria-pressed="${x.n===sel}" data-k="${x.n}"><b>${x.id}</b><br><span class="st ${x.cls}">${x.st}</span><small>${x.t}</small></button>`).join('');
+  $('hist').innerHTML=k[sel-1].h.map(r=>`<li><time>${r[0]}</time><span><b>${esc(r[1])}</b> — ${esc(r[2])}</span></li>`).join('');
+  document.querySelectorAll('.kit').forEach(b=>b.onclick=()=>{sel=+b.dataset.k;renderKits()});
+}
+$('fail').onchange=e=>{fail=e.target.checked;renderKits();sys(fail?'Учёт: по комплекту №2 нет считываний более 14 дней':'Учёт: данные по комплекту №2 восстановлены')};
+
+/* chat */
+const chat=$('chat');
+function add(cls,html){const d=document.createElement('div');d.className='msg '+cls;d.innerHTML=html;chat.appendChild(d);chat.scrollTop=chat.scrollHeight;return d}
+function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;chat.appendChild(d);chat.scrollTop=chat.scrollHeight}
+function me(t){add('me',t)}
+function bot(html,chips){
+  quick([]);
+  const ty=document.createElement('div');ty.className='typing';ty.textContent='помощник печатает…';chat.appendChild(ty);chat.scrollTop=chat.scrollHeight;
+  const delay=matchMedia('(prefers-reduced-motion: reduce)').matches?0:550;
+  timers.push(setTimeout(()=>{ty.remove();add('bot',html);quick(chips||[])},delay));
+}
+function quick(list){
+  const q=$('quick');q.innerHTML='';
+  list.concat([['Позвать человека',()=>human('Работник попросил человека','Просьба связаться с оператором')]]).forEach(([t,fn],i,arr)=>{
+    const b=document.createElement('button');b.className='chip'+(i===arr.length-1?' human':'');b.textContent=t;
+    b.onclick=()=>{me(esc(t));fn()};q.appendChild(b);
+  });
+}
+const MENU=()=>[['Порвалось',damage],['Не получил комплект',where],['Не подходит размер',size],['Плохо постирано',wash],['Можно ли работать в повреждённой?',safety],['Где мой комплект?',where]];
+function start(){
+  timers.forEach(clearTimeout);timers=[];chat.innerHTML='';ctx={};renderKits();
+  add('bot','Здравствуйте! Я помощник центра выдачи. Опишите, что случилось с одеждой, или выберите вариант ниже.');
+  quick(MENU());
+}
+function statusText(){
+  const k=kits();
+  let s=`По данным учёта:<br>• №1 — на вас (выдан 06.10);<br>`;
+  s+= fail?`• №2 — <b>нет свежих данных</b> (последнее считывание 24.09, прачечная);<br>`:`• №2 — в стирке, будет в постамате П-2 15.10 к 08:00;<br>`;
+  s+=`• №3 — ${ctx.booked?'забронирован для вас':'<b>готов в центре выдачи</b>, полка 12'}.`;
+  return s+'<span class="src">Источник: RFID-учёт, считывания до 13.10 16:20</span>';
+}
+function offerBook(extra){return [['Забронировать №3 до 20:00',book]].concat(extra||[],[['Другой вопрос',()=>bot('Что ещё случилось?',MENU())]])}
+function book(){ctx.booked=true;renderKits();M.noVisit++;ticket({type:'Бронь комплекта',item:'К-4417-3',action:'Держать на полке 12 до 20:00',said:'Комплект №3 забронирован до 20:00',prio:'Обычная',conf:'Высокая',auto:true});
+  bot('Готово: комплект №3 забронирован за вами до 20:00. Назовите номер пропуска в окне выдачи. Пришлю SMS, когда №2 вернётся из стирки.',[['Спасибо',()=>bot('Обращайтесь! Хорошей смены.',MENU())]]);}
+function where(){
+  if(fail){bot(statusText()+'<br>Где сейчас комплект №2, сказать не могу — данных нет. <b>Передал вопрос оператору</b>, он проверит прачечную и ответит сегодня.',offerBook());
+    M.human++;ticket({type:'Статус: нет данных учёта',item:'К-4417-2',action:'Запросить прачечную; при утере оформить замену',said:'Статус неизвестен, ответ сегодня',prio:'Нужна проверка',conf:'Тип ясен, данных нет',esc:true});return}
+  M.noVisit++;M.total++;bump();
+  bot(statusText()+'<br>Чистый комплект можно взять сегодня: №3 ждёт в центре выдачи.',offerBook());
+}
+function damage(){bot('Пришлите фото повреждения — так оператор сразу поймёт, что чинить.',[['Прикрепить фото',()=>{chat.lastChild.innerHTML='<span class="photo" role="img" aria-label="фото повреждения"></span>';ctx.photo=1;
+  bot('Фото получил. Какое изделие?',[['Куртка',()=>dmg2('Куртка')],['Брюки',()=>dmg2('Брюки')],['Комбинезон',()=>dmg2('Комбинезон')]])}],['Без фото',()=>bot('Хорошо. Какое изделие?',[['Куртка',()=>dmg2('Куртка')],['Брюки',()=>dmg2('Брюки')],['Комбинезон',()=>dmg2('Комбинезон')]])]])}
+function dmg2(it){ctx.item=it;bot(`${it} из комплекта, который сейчас на вас (№1)?`,[['Да, №1',()=>dmg3(1)],['Нет, другой',()=>dmg3(0)]])}
+function dmg3(onMe){
+  ticket({type:'Повреждение изделия',item:`${ctx.item}, ${onMe?'К-4417-1':'комплект уточнить'}${ctx.photo?' · фото 1 шт.':''}`,action:'Принять изделие в ремонт; выдать сменный комплект',said:'Сдать изделие в центре выдачи, взять №3',prio:'Обычная',conf:onMe?'Высокая':'Средняя'});
+  bot(statusText()+`<br>${ctx.item} сдайте в центре выдачи — <b>заявка на ремонт уже у оператора</b>. Взамен можно сразу забрать комплект №3.`,offerBook());
+}
+function size(){bot('Какое изделие не подходит?',[['Куртка',()=>sz2('Куртка')],['Брюки',()=>sz2('Брюки')],['Обувь',()=>sz2('Обувь')]])}
+function sz2(it){ctx.item=it;bot('Что не так?',[['Маловато',()=>sz3('мало')],['Великовато',()=>sz3('велико')],['Не та длина',()=>sz3('длина')]])}
+function sz3(p){bot('Размер подбирает сотрудник на примерке, сам я его не меняю. Когда удобно зайти в центр выдачи?',[['Сегодня 17:30',()=>sz4('сегодня 17:30')],['Завтра 07:40',()=>sz4('завтра 07:40')],['Завтра 16:00',()=>sz4('завтра 16:00')]]);ctx.p=p}
+function sz4(t){M.noVisit++;ticket({type:'Замена размера',item:`${ctx.item} (${ctx.p}), все 3 комплекта`,action:`Примерка ${t}; заменить размер во всех комплектах`,said:`Записан на примерку ${t}`,prio:'Обычная',conf:'Высокая'});
+  bot(`Записал вас на примерку: <b>${t}</b>, центр выдачи, примерочная. Оператор подготовит соседние размеры. Напомню SMS за час.`,[['Спасибо',()=>bot('Обращайтесь!',MENU())]])}
+function wash(){bot('Пришлите фото, пожалуйста. Это комплект №1, полученный 06.10?',[['Прикрепить фото, да №1',()=>{chat.lastChild.innerHTML='<span class="photo" role="img" aria-label="фото пятна"></span>';w2()}],['Без фото',w2]])}
+function w2(){ticket({type:'Качество стирки',item:'К-4417-1, партия стирки 04.10',action:'Проверить партию; при подтверждении — перестирка',said:'Ответ в течение рабочего дня; №3 доступен',prio:'Обычная',conf:'Высокая'});
+  bot('Передал оператору: он проверит партию стирки от 04.10 и ответит в течение рабочего дня. Если нужен чистый комплект сейчас — №3 готов.',offerBook())}
+function safety(){M.safetyAsked=(M.safetyAsked||0)+1;M.human++;
+  ticket({type:'Вопрос о пригодности СИЗ',item:'К-4417-1 · повреждение',action:'Передано специалисту по охране труда',said:'ИИ не оценивает пригодность; обратиться к мастеру',prio:'Срочно · специалисту ОТ',conf:'Правило безопасности',esc:true,urgent:true});
+  bot('Решение о том, можно ли работать в повреждённой одежде, принимает <b>специалист по охране труда</b> — на такие вопросы я не отвечаю. Я уже передал ему ваше обращение как срочное. До его ответа обратитесь к мастеру смены.<br><br>Чистый комплект №3 готов в центре выдачи.<span class="src">Правило: вопросы о защитных свойствах — только специалисту</span>',offerBook())}
+function human(type,note){M.human++;ticket({type,item:'—',action:'Связаться с работником',said:'Оператор свяжется в течение 15 минут',prio:'Человек',conf:'По запросу работника',esc:true});
+  bot('Передал оператору — он свяжется с вами в течение 15 минут. Пока жду, могу показать статус ваших комплектов.',[['Покажи статус',where]])}
+function unclear(){bot('Не до конца понял. Что ближе к вашей ситуации?',MENU())}
+function route(t){
+  const s=t.toLowerCase();
+  if(/можно|защищ|свар|искр|огн|кислот|безопас|опасн/.test(s))return safety();
+  if(/порв|дыр|сломал|оторв|прож|молни|пугов|разорв/.test(s))return damage();
+  if(/разм|мал|велик|жмёт|жмет|длин|коротк/.test(s))return size();
+  if(/стир|пятн|грязн|запах|воня/.test(s))return wash();
+  if(/где|статус|не получ|пуст|нет комплект|не приш/.test(s))return where();
+  if(/человек|оператор|позов|живой/.test(s))return human('Работник попросил человека');
+  if(/кож|зуд|аллерг|травм|больн|болит/.test(s)){M.human++;ticket({type:'Жалоба на здоровье',item:'—',action:'Срочно связаться; мастер смены',said:'Передано человеку срочно',prio:'Срочно',conf:'Правило безопасности',esc:true,urgent:true});return bot('Это важно: <b>срочно передал оператору</b>, обратитесь к мастеру смены. Медицинских советов я не даю.',MENU())}
+  unclear();
+}
+$('compose').onsubmit=e=>{e.preventDefault();const v=$('inp').value.trim();if(!v)return;me(esc(v));$('inp').value='';route(v)};
+$('reset').onclick=start;
+
+/* tickets */
+const Q=[
+ {id:'№ 0129',type:'Вопрос о пригодности СИЗ',who:'ID 2290 · цех 3',item:'Куртка · прожог рукава',action:'Передано специалисту по охране труда',said:'ИИ не оценивает пригодность',prio:'Срочно · специалисту ОТ',conf:'Правило безопасности',status:'Новое',urgent:true,esc:true,demo:true,log:[]},
+ {id:'№ 0130',type:'Замена размера',who:'ID 3051 · цех 2',item:'Брюки (мало), все 3 комплекта',action:'Примерка завтра 07:40',said:'Записан на примерку',prio:'Обычная',conf:'Высокая',status:'Новое',demo:true,log:[]}];
+let cur=0;
+function ticket(o){M.total++;Q.unshift(Object.assign({id:'№ 0'+(seq++),who:'ID 4417 · цех 2',status:o.auto?'Закрыто ботом':'Новое',log:[],fresh:true},o));cur=0;
+  sys(`Создано обращение ${Q[0].id} → у оператора`);renderQ();bump()}
+function bump(){$('qbadge').textContent=Q.filter(t=>t.status==='Новое').length;renderK()}
+function pill(t){return t.status==='Закрыто ботом'||t.status==='Закрыто'?'done':t.status==='В работе'?'work':t.urgent?'urgent':'new'}
+function renderQ(){
+  $('queue').innerHTML=Q.length?Q.map((t,i)=>`<button class="qi" aria-pressed="${i===cur}" data-i="${i}"><span class="row"><strong>${t.id}</strong><span class="pill ${pill(t)}">${t.urgent&&t.status==='Новое'?'Срочно':t.status}</span></span><span>${esc(t.type)}</span><span class="label" style="letter-spacing:0;text-transform:none">${esc(t.who)}${t.demo?' · пример':''}</span></button>`).join(''):'<div class="empty">Очередь пуста</div>';
+  document.querySelectorAll('.qi').forEach(b=>b.onclick=()=>{cur=+b.dataset.i;renderQ()});
+  const t=Q[cur];
+  if(!t){$('detail').innerHTML='<div class="empty">Выберите обращение</div>';return}
+  const closed=/Закрыто/.test(t.status);
+  $('detail').innerHTML=`<span class="label">Карточка обращения — собрана помощником</span>
+  <div class="card"><div class="card-h"><strong>${t.id}</strong><span class="pill ${t.urgent?'urgent':'new'}">${esc(t.prio)}</span></div>
+  <dl><dt>Работник</dt><dd>${esc(t.who)}</dd><dt>Тип</dt><dd id="dtype">${esc(t.type)}</dd><dt>Изделие</dt><dd>${esc(t.item)}</dd>
+  <dt>Предложено</dt><dd>${esc(t.action)}</dd><dt>Сказано работнику</dt><dd>${esc(t.said)}</dd><dt>Уверенность</dt><dd>${esc(t.conf)}</dd><dt>Статус</dt><dd><span class="pill ${pill(t)}">${esc(t.status)}</span></dd></dl>
+  <div class="actions">
+   <button class="btn primary" id="a-ok" ${t.status!=='Новое'?'disabled':''}>Подтвердить</button>
+   <select id="a-type" aria-label="Исправить тип"><option value="">Исправить тип…</option>${['Повреждение изделия','Замена размера','Качество стирки','Статус комплекта','Вопрос о пригодности СИЗ','Другое'].map(x=>`<option>${x}</option>`).join('')}</select>
+   <button class="btn" id="a-spec" ${closed?'disabled':''}>Передать специалисту ОТ</button>
+   <button class="btn" id="a-close" ${closed?'disabled':''}>Закрыть</button>
+  </div><div class="log">${t.log.map(esc).join('<br>')||'Действий оператора пока нет'}</div></div>
+  <div class="hint">${t.esc?'Это обращение ИИ сам не решал — сразу передал человеку.':'Оператор проверяет и подтверждает одним нажатием. Каждая правка считается в метрике «карточки без правок».'}</div>`;
+  $('a-ok').onclick=()=>{t.status='В работе';t.log.push('Оператор подтвердил карточку');if(!t.edited)M.confirmed++;notify(t,'Оператор подтвердил вашу заявку '+t.id+'. Ждём вас в центре выдачи.');renderQ();bump()};
+  $('a-type').onchange=e=>{if(!e.target.value)return;t.type=e.target.value;t.edited=true;M.edited++;t.log.push('Тип исправлен: '+e.target.value);renderQ();bump()};
+  $('a-spec').onclick=()=>{t.prio='Специалист ОТ';t.urgent=true;t.log.push('Передано специалисту по охране труда');notify(t,'Ваш вопрос '+t.id+' передан специалисту по охране труда.');renderQ()};
+  $('a-close').onclick=()=>{t.status='Закрыто';t.log.push('Закрыто оператором');notify(t,'Заявка '+t.id+' выполнена. Спасибо!');renderQ();bump()};
+}
+function notify(t,msg){if(t.who.startsWith('ID 4417')){add('bot','<b>SMS-уведомление:</b> '+esc(msg))}}
+function renderK(){
+  const done=M.confirmed+M.edited, pct=done?Math.round(M.confirmed/done*100)+'%':'—';
+  $('kpis').innerHTML=[[M.total,'обращений в этой сессии'],[M.noVisit,'закрыто без визита в центр'],[M.human,'передано человеку'],[pct,'карточек без правок оператора'],[0,'ответов ИИ о защитных свойствах','safe']]
+   .map(k=>`<div class="kpi ${k[2]||''}"><b>${k[0]}</b><span>${k[1]}</span></div>`).join('');
+}
+/* tabs */
+function show(tab){['worker','operator','pilot'].forEach(x=>{$('p-'+x).hidden=x!==tab;$('t-'+x).setAttribute('aria-selected',x===tab)});if(tab==='operator')renderQ();if(tab==='pilot')renderK()}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>show(b.dataset.tab));
+start();renderQ();bump();
+const h=location.hash.slice(1);if(['operator','pilot'].includes(h))show(h);
+window.__demo={route,me,book,show,dmg:()=>{me('Порвал рукав куртки');damage()}};
+</script>
+</body>
+</html>
